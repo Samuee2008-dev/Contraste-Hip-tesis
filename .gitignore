@@ -1,0 +1,9 @@
+.venv/
+_pycache_/
+*.pyc
+.ipynb_checkpoints/
+.streamlit/
+data/raw/
+results/
+.env
+.vscode/*.log
