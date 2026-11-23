@@ -84,7 +84,6 @@ const qt=(d,p)=>{const s=[...d].sort((x,y)=>x-y),i=(s.length-1)p,f=Math.floor(i)
 const parse=t=>t.split(/[,;\s]+/).map(parseFloat).filter(Number.isFinite);
 const f4=v=>v.toFixed(4),fpval=p=>p<1e-4?'< 0.0001':p.toFixed(4);
 
-// Matemáticas
 function lg(x){const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,.1208650973866179e-2,-.5395239384953e-5];let y=x,t=x+5.5;t-=(x+.5)*Math.log(t);let s=1.000000000190015;for(const k of c)s+=k/++y;return -t+Math.log(2.5066282746310005*s/x)}
 function bc(x,a,b){const T=1e-30;let c=1,d=1-(a+b)x/(a+1);if(Math.abs(d)<T)d=T;d=1/d;let h=d;for(let m=1;m<200;m++){const m2=2*m;let g=m(b-m)x/((a-1+m2)(a+m2));d=1+g*d;if(Math.abs(d)<T)d=T;c=1+g/c;if(Math.abs(c)<T)c=T;d=1/d;h*=d*c;g=-(a+m)(a+b+m)*x/((a+m2)(a+1+m2));d=1+g*d;if(Math.abs(d)<T)d=T;c=1+g/c;if(Math.abs(c)<T)c=T;d=1/d;const l=d*c;h*=l;if(Math.abs(l-1)<1e-10)break}return h}
 function ib(x,a,b){if(x<=0)return 0;if(x>=1)return 1;const f=Math.exp(lg(a+b)-lg(a)-lg(b)+a*Math.log(x)+b*Math.log(1-x));return x<(a+1)/(a+b+2)?f*bc(x,a,b)/a:1-f*bc(1-x,b,a)/b}
@@ -97,7 +96,6 @@ const fp=(f,df1,df2)=>1-ib(df1*f/(df1*f+df2),df1/2,df2/2);
 
 const need=(a,k,l)=>{if(a.length<k)throw Error(Pega al menos ${k} valores válidos en «${l}».)};
 
-// Configuración de Pruebas
 const TESTS={
  ind:{use:'Compara las medias de dos grupos distintos (ej. dos tratamientos).',type:'two',la:'Grupo A',lb:'Grupo B',eq:1,ex:['45.3, 89.2, 12.0, 23.9','15.1, 30.5, 25.2, 74.6'],
   h0:'μ_A = μ_B',h1:'μ_A ≠ μ_B',yes:'las medias de A y B son distintas',
