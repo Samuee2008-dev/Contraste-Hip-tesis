@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de contraste de hipótesis</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <section>
+      <h2>Nivel de significación (α)</h2>
+      <div class="alpha-out" id="alpha-out">0.05</div>
+      <input type="range" id="alpha" min="0.01" max="0.10" step="0.01" value="0.05" aria-label="Nivel de significación alfa">
+      <div class="chips">
+        <button type="button" data-a="0.01">0.01</button>
+        <button type="button" data-a="0.05">0.05</button>
+        <button type="button" data-a="0.10">0.10</button>
+      </div>
+      <p class="hint">α es el riesgo que aceptas de equivocarte al rechazar H₀. Lo habitual es 0.05.</p>
+    </section>
+    <section>
+      <h2>Cómo usar</h2>
+      <ol>
+        <li>Elige la prueba que encaja con tus datos.</li>
+        <li>Pega los valores en los campos.</li>
+        <li>El resultado se actualiza solo.</li>
+      </ol>
+      <p class="hint">Separadores válidos: coma, punto y coma, espacio o salto de línea.</p>
+    </section>
+    <section>
+      <h2>Cómo leer el resultado</h2>
+      <ol>
+        <li>Si <b>p &lt; α</b>, se rechaza H₀: hay evidencia de un efecto.</li>
+        <li>Si <b>p ≥ α</b>, no se rechaza H₀: falta evidencia.</li>
+        <li>El tamaño del efecto dice si la diferencia importa en la práctica.</li>
+      </ol>
+    </section>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <h1>Calculadora de contraste de hipótesis</h1>
+      <p>Elige la prueba, pega tus valores y el resultado aparece al instante, con una explicación en palabras sencillas.</p>
+    </header>
+
+    <section class="card">
+      <h2>1. Elige la prueba</h2>
+      <p class="hint" id="use"></p>
+      <label for="test">Tipo de contraste</label>
+      <select id="test">
+        <option value="ind">t de Student — 2 grupos independientes</option>
+        <option value="pair">t pareada — mismas personas, antes y después</option>
+        <option value="one">t de 1 muestra — comparar con un valor</option>
+        <option value="mw">Mann-Whitney — 2 grupos, sin suponer normalidad</option>
+        <option value="anova">ANOVA — 3 o más grupos independientes</option>
+        <option value="kruskal">Kruskal-Wallis — 3 o más grupos, no paramétrico</option>
+        <option value="chi">Chi-cuadrado — asociación entre variables categóricas</option>
+        <option value="corr">Correlación — Pearson / Spearman</option>
+        <option value="z2p">Z — 2 proporciones independientes</option>
+        <option value="z1m">Z — 1 media (con σ conocida)</option>
+        <option value="z1p">Z — 1 proporción (comparar con un valor)</option>
+      </select>
+    </section>
+
+    <section class="card">
+      <h2>2. Pega tus datos</h2>
+      <div id="input-area"></div>
+      <div class="btns">
+        <button type="button" class="primary" id="ex">Cargar ejemplo</button>
+        <button type="button" id="clr">Limpiar</button>
+      </div>
+    </section>
+
+    <div id="out" aria-live="polite"></div>
+  </main>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const sum=a=>a.reduce((x,y)=>x+y,0),mean=a=>sum(a)/a.length,vr=a=>{const m=mean(a);return sum(a.map(x=>(x-m)**2))/(a.length-1)};
+const qt=(d,p)=>{const s=[...d].sort((x,y)=>x-y),i=(s.length-1)p,f=Math.floor(i);return s[f]+(s[Math.min(f+1,s.length-1)]-s[f])(i-f)};
+const parse=t=>t.split(/[,;\s]+/).map(parseFloat).filter(Number.isFinite);
+const f4=v=>v.toFixed(4),fpval=p=>p<1e-4?'< 0.0001':p.toFixed(4);
+
+// Matemáticas
+function lg(x){const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,.1208650973866179e-2,-.5395239384953e-5];let y=x,t=x+5.5;t-=(x+.5)*Math.log(t);let s=1.000000000190015;for(const k of c)s+=k/++y;return -t+Math.log(2.5066282746310005*s/x)}
+function bc(x,a,b){const T=1e-30;let c=1,d=1-(a+b)x/(a+1);if(Math.abs(d)<T)d=T;d=1/d;let h=d;for(let m=1;m<200;m++){const m2=2*m;let g=m(b-m)x/((a-1+m2)(a+m2));d=1+g*d;if(Math.abs(d)<T)d=T;c=1+g/c;if(Math.abs(c)<T)c=T;d=1/d;h*=d*c;g=-(a+m)(a+b+m)*x/((a+m2)(a+1+m2));d=1+g*d;if(Math.abs(d)<T)d=T;c=1+g/c;if(Math.abs(c)<T)c=T;d=1/d;const l=d*c;h*=l;if(Math.abs(l-1)<1e-10)break}return h}
+function ib(x,a,b){if(x<=0)return 0;if(x>=1)return 1;const f=Math.exp(lg(a+b)-lg(a)-lg(b)+a*Math.log(x)+b*Math.log(1-x));return x<(a+1)/(a+b+2)?f*bc(x,a,b)/a:1-f*bc(1-x,b,a)/b}
+const tp=(t,df)=>ib(df/(df+t*t),df/2,.5);
+const erf=x=>{const s=Math.sign(x);x=Math.abs(x);const t=1/(1+.3275911*x);return s*(1-((((1.061405429*t-1.453152027)*t+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x))};
+const zp=z=>1-erf(Math.abs(z)/Math.SQRT2);
+function gammap(a,x){if(x<0||a<=0)return NaN;if(x===0)return 0;if(x<a+1){let sum=1/a,term=sum;for(let n=1;n<100;n++){term*=x/(a+n);sum+=term;if(Math.abs(term)<1e-10*Math.abs(sum))break}return sum*Math.exp(-x+a*Math.log(x)-lg(a))}else{let b=x+1-a,c=1/1e-30,d=1/b,h=d;for(let i=1;i<100;i++){let an=-i*(i-a);b+=2;d=an*d+b;if(Math.abs(d)<1e-30)d=1e-30;c=b+an/c;if(Math.abs(c)<1e-30)c=1e-30;d=1/d;let del=d*c;h*=del;if(Math.abs(del-1)<1e-10)break}return 1-Math.exp(-x+a*Math.log(x)-lg(a))*h}}
+const chisqp=(chi2,df)=>1-gammap(df/2,chi2/2);
+const fp=(f,df1,df2)=>1-ib(df1*f/(df1*f+df2),df1/2,df2/2);
+
+const need=(a,k,l)=>{if(a.length<k)throw Error(Pega al menos ${k} valores válidos en «${l}».)};
+
+// Configuración de Pruebas
+const TESTS={
+ ind:{use:'Compara las medias de dos grupos distintos (ej. dos tratamientos).',type:'two',la:'Grupo A',lb:'Grupo B',eq:1,ex:['45.3, 89.2, 12.0, 23.9','15.1, 30.5, 25.2, 74.6'],
+  h0:'μ_A = μ_B',h1:'μ_A ≠ μ_B',yes:'las medias de A y B son distintas',
+  run(A,B,_,eq){need(A,2,'Grupo A');need(B,2,'Grupo B');const n1=A.length,n2=B.length,v1=vr(A),v2=vr(B),sp=((n1-1)*v1+(n2-1)*v2)/(n1+n2-2);let se,df;
+   if(eq){se=Math.sqrt(sp*(1/n1+1/n2));df=n1+n2-2}else{const a=v1/n1,b=v2/n2;se=Math.sqrt(a+b);df=(a+b)**2/(a*a/(n1-1)+b*b/(n2-1))}
+   const t=(mean(A)-mean(B))/se;return{name:eq?'t de Student':'t de Welch',stat:t,p:tp(t,df),df,eff:(mean(A)-mean(B))/Math.sqrt(sp),en:'d de Cohen'}}},
+ pair:{use:'Compara dos mediciones de las mismas personas (ej. antes y después).',type:'two',la:'Antes',lb:'Después',ex:['82, 75, 90, 68, 77, 85','78, 70, 88, 66, 74, 80'],
+  h0:'μ_diferencia = 0',h1:'μ_diferencia ≠ 0',yes:'hay un cambio entre «antes» y «después»',
+  run(A,B){if(A.length!==B.length)throw Error('«Antes» y «Después» deben tener la misma cantidad de valores.');const D=A.map((x,i)=>x-B[i]);need(D,2,'Antes');const s=Math.sqrt(vr(D));
+   return{name:'t pareada',stat:mean(D)/(s/Math.sqrt(D.length)),p:tp(mean(D)/(s/Math.sqrt(D.length)),D.length-1),df:D.length-1,eff:mean(D)/s,en:'d de Cohen'}}},
+ one:{use:'Comprueba si la media de una muestra es distinta de un valor conocido.',type:'one',la:'Muestra',mu:1,ex:['5.1, 4.9, 5.6, 5.8, 5.2, 5.4','','5'],
+  h0:'μ = μ₀',h1:'μ ≠ μ₀',yes:'la media es distinta del valor de referencia',
+  run(A,_,mu){need(A,2,'Muestra');const s=Math.sqrt(vr(A)),t=(mean(A)-mu)/(s/Math.sqrt(A.length));return{name:'t de 1 muestra',stat:t,p:tp(t,A.length-1),df:A.length-1,eff:(mean(A)-mu)/s,en:'d de Cohen'}}},
+ mw:{use:'Alternativa a la t cuando los datos son no normales o pocos. Compara rangos.',type:'two',la:'Grupo A',lb:'Grupo B',ex:['45.3, 89.2, 12.0, 23.9','15.1, 30.5, 25.2, 74.6'],
+  h0:'Las dos distribuciones son iguales',h1:'Un grupo tiende a tener valores mayores',yes:'un grupo tiende a tener valores mayores',
+  run(A,B){need(A,1,'Grupo A');need(B,1,'Grupo B');const all=[...A.map(v=>[v,0]),...B.map(v=>[v,1])].sort((x,y)=>x[0]-y[0]),rk=[];
+   for(let i=0;i<all.length;){let j=i;while(j+1<all.length&&all[j+1][0]===all[i][0])j++;for(let k=i;k<=j;k++)rk[k]=(i+j)/2+1;i=j+1}
+   const n1=A.length,n2=B.length,N=n1+n2,U=sum(all.map((x,i)=>x[1]?0:rk[i]))-n1*(n1+1)/2,z=(U-n1*n2/2)/Math.sqrt(n1*n2*(N+1)/12);
+   return{name:'U de Mann-Whitney',stat:U,p:zp(z),df:null,eff:z/Math.sqrt(N),en:'r'}}},
+ anova:{use:'Compara las medias de 3 o más grupos independientes.',type:'multi',ex:['10, 12, 11, 13','14, 15, 16, 15','18, 19, 17, 20'],
+  h0:'Todas las medias son iguales',h1:'Al menos una media difiere',yes:'al menos un grupo tiene una media distinta',
+  run(G){if(G.length<3)throw Error('Se necesitan al menos 3 grupos.');const k=G.length,N=sum(G.map(g=>g.length)),m=G.map(g=>mean(g)),gm=sum(G.map(g=>sum(g)))/N;
+   let ssB=sum(G.map((g,i)=>g.length*(m[i]-gm)*2)),ssW=sum(G.map(g=>sum(g.map(x=>(x-mean(g))*2)))),F=(ssB/(k-1))/(ssW/(N-k));
+   return{name:'ANOVA de 1 factor',stat:F,p:fp(F,k-1,N-k),df:[k-1,N-k],eff:ssB/(ssB+ssW),en:'η²'}}},
+ kruskal:{use:'Compara 3 o más grupos sin suponer normalidad.',type:'multi',ex:['10, 12, 11, 13','14, 15, 16, 15','18, 19, 17, 20'],
+  h0:'Todas las distribuciones son iguales',h1:'Al menos una distribución difiere',yes:'al menos un grupo tiene una distribución distinta',
+  run(G){if(G.length<3)throw Error('Se necesitan al menos 3 grupos.');const k=G.length,all=[];G.forEach((g,i)=>g.forEach(v=>all.push({v,i})));all.sort((a,b)=>a.v-b.v);const rk=[];
+   for(let i=0;i<all.length;){let j=i;while(j+1<all.length&&all[j+1].v===all[i].v)j++;for(let l=i;l<=j;l++)rk[l]=(i+j)/2+1;i=j+1}
+   const R=new Array(k).fill(0);all.forEach((d,i)=>R[d.i]+=rk[i]);const N=all.length,H=(12/(N*(N+1)))sum(G.map((g,i)=>R[i]2/g.length))-3(N+1);
+   return{name:'Kruskal-Wallis',stat:H,p:chisqp(H,k-1),df:k-1,eff:H/(N-1),en:'ε²'}}},
+ chi:{use:'Comprueba si dos variables categóricas son independientes.',type:'table',ex:['10, 20\n30, 15'],
+  h0:'Las variables son independientes',h1:'Las variables están asociadas',yes:'existe asociación entre las variables',
+  run(tablaStr){const f=tablaStr.trim().split('\n').map(x=>x.split(/[,;\s]+/).map(Number).filter(Number.isFinite));if(f.length<2||f[0].length<2)throw Error('La tabla debe tener al menos 2 filas y 2 columnas.');const r=f.length,c=f[0].length,tot=sum(f.flat());if(tot===0)throw Error('Los datos no pueden ser todos cero.');
+   const sf=f.map(x=>sum(x)),sc=Array(c).fill(0).map((_,j)=>sum(f.map(x=>x[j])));let chi2=0;for(let i=0;i<r;i++)for(let j=0;j<c;j++){const e=sf[i]sc[j]/tot;if(e>0)chi2+=(f[i][j]-e)*2/e}
+   return{name:'Chi-cuadrado',stat:chi2,p:chisqp(chi2,(r-1)(c-1)),df:(r-1)(c-1),eff:Math.sqrt(chi2/(tot*Math.min(r-1,c-1))),en:'V de Cramér'}}},
+ corr:{use:'Mide la relación lineal entre dos variables numéricas.',type:'two',la:'Variable X',lb:'Variable Y',ex:['1, 2, 3, 4, 5, 6','2.1, 3.9, 6.2, 8.1, 9.8, 12.1'],
+  h0:'ρ = 0 (no hay correlación)',h1:'ρ ≠ 0 (hay correlación)',yes:'hay una correlación significativa',
+  run(X,Y){if(X.length!==Y.length)throw Error('X e Y deben tener el mismo número de valores.');const n=X.length;if(n<3)throw Error('Se necesitan al menos 3 pares.');const mX=mean(X),mY=mean(Y);let num=0,dX=0,dY=0;for(let i=0;i<n;i++){num+=(X[i]-mX)(Y[i]-mY);dX+=(X[i]-mX)2;dY+=(Y[i]-mY)*2}
+   const r=num/Math.sqrt(dX*dY),t=r*Math.sqrt((n-2)/(1-r*r));return{name:'Correlación de Pearson',stat:r,p:tp(t,n-2),df:n-2,eff:r,en:'r'}}},
+ z2p:{use:'Compara dos proporciones independientes (ej. tasa de conversión A vs B).',type:'props',ex:['20','100','30','100'],
+  h0:'p₁ = p₂',h1:'p₁ ≠ p₂',yes:'las proporciones son distintas',
+  run(x1,n1,x2,n2){const p1=x1/n1,p2=x2/n2,p=(x1+x2)/(n1+n2),se=Math.sqrt(p*(1-p)*(1/n1+1/n2)),z=(p1-p2)/se;return{name:'Z 2 proporciones',stat:z,p:zp(z),df:null,eff:2*Math.asin(Math.sqrt(p1))-2*Math.asin(Math.sqrt(p2)),en:'h de Cohen'}}},
+ z1m:{use:'Compara la media de una muestra con un valor, asumiendo que conoces la desviación poblacional (σ).',type:'one',la:'Muestra',ex:['12, 14, 13, 15, 11','','0','2.5'],
+  h0:'μ = μ₀',h1:'μ ≠ μ₀',yes:'la media es distinta del valor de referencia',
+  run(A,_,mu,sigma){need(A,2,'Muestra');const z=(mean(A)-mu)/(sigma/Math.sqrt(A.length));return{name:'Z 1 media',stat:z,p:zp(z),df:null,eff:(mean(A)-mu)/sigma,en:'d de Cohen'}}},
+ z1p:{use:'Compara la proporción observada en una muestra con un valor de referencia.',type:'oneprop',ex:['25','100','0.20'],
+  h0:'p = p₀',h1:'p ≠ p₀',yes:'la proporción es distinta del valor de referencia',
+  run(x,n,p0){const phat=x/n,se=Math.sqrt(p0*(1-p0)/n),z=(phat-p0)/se;return{name:'Z 1 proporción',stat:z,p:zp(z),df:null,eff:2*Math.asin(Math.sqrt(phat))-2*Math.asin(Math.sqrt(p0)),en:'h de Cohen'}}}
+};
+
+const C=['var(--a)','var(--b)'];
+function box(gs){
+ const all=gs.flatMap(g=>g.d),lo=Math.min(...all),hi=Math.max(...all),W=420,H=280,m=34,y=v=>H-m-(v-lo)/((hi-lo)||1)*(H-2*m);
+ let s=<svg viewBox="0 0 ${W} ${H}" role="img">;
+ [lo,(lo+hi)/2,hi].forEach(v=>s+=<line x1="${m+10}" x2="${W-10}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)"/><text x="${m+4}" y="${y(v)+4}" text-anchor="end">${+v.toPrecision(3)}</text>);
+ gs.forEach((g,i)=>{const x=m+10+(W-m-20)/(gs.length+1)(i+1),q1=qt(g.d,.25),md=qt(g.d,.5),q3=qt(g.d,.75),r=1.5(q3-q1),f=g.d.filter(v=>v>=q1-r&&v<=q3+r),w=Math.min(...f),u=Math.max(...f);
+  s+=<g style="stroke:${C[i%C.length]};fill:none;stroke-width:2"><line x1="${x}" x2="${x}" y1="${y(w)}" y2="${y(u)}"/><rect x="${x-28}" width="56" y="${y(q3)}" height="${Math.max(y(q1)-y(q3),1)}" style="fill:${C[i%C.length]};fill-opacity:.15"/><line x1="${x-28}" x2="${x+28}" y1="${y(md)}" y2="${y(md)}" style="stroke-width:3.5"/>${g.d.filter(v=>!f.includes(v)).map(v=><circle cx="${x}" cy="${y(v)}" r="4"/>).join('')}</g><text x="${x}" y="${H-10}" text-anchor="middle">${g.n}</text>});
+ return s+'</svg>'}
+function hist(gs){
+ const all=gs.flatMap(g=>g.d),lo=Math.min(...all),hi=Math.max(...all),k=Math.min(8,Math.max(3,Math.ceil(Math.sqrt(all.length)))),w=((hi-lo)||1)/k,W=420,H=280,m=34,bw=(W-m-20)/k;
+ const cnt=gs.map(g=>{const c=Array(k).fill(0);g.d.forEach(v=>c[Math.min(k-1,Math.floor((v-lo)/w))]++);return c}),mx=Math.max(...cnt.flat())||1;
+ let s=<svg viewBox="0 0 ${W} ${H}" role="img"><line x1="${m+10}" x2="${W-10}" y1="${H-m}" y2="${H-m}" style="stroke:var(--line)"/>;
+ cnt.forEach((c,i)=>c.forEach((n,j)=>{const h=n/mx*(H-2*m);if(n)s+=<rect x="${m+10+j*bw+i*bw/gs.length}" y="${H-m-h}" width="${Math.max(bw/gs.length-1,1)}" height="${h}" style="fill:${C[i%C.length]};fill-opacity:.8"/>}));
+ return s+<text x="${m+10}" y="${H-12}">${+lo.toPrecision(3)}</text><text x="${W-10}" y="${H-12}" text-anchor="end">${+hi.toPrecision(3)}</text><text x="${m+4}" y="${H-m}" text-anchor="end">0</text><text x="${m+4}" y="${m+4}" text-anchor="end">${mx}</text></svg>}
+
+function renderInputs(T) {
+  const area = $('#input-area'); let html = '';
+  if (T.type === 'two') {
+    html = `<div class="grid2">
+      <div class="field"><label>${T.la}</label><textarea id="a" spellcheck="false"></textarea></div>
+      <div class="field"><label>${T.lb}</label><textarea id="b" spellcheck="false"></textarea></div></div>
+      ${T.eq ? '<div class="opts"><label><input type="checkbox" id="eq"> Asumir varianzas iguales (Student). Sin marcar se usa Welch.</label></div>' : ''}`;
+  } else if (T.type === 'one') {
+    html = `<div class="grid2">
+      <div class="field"><label>${T.la}</label><textarea id="a" spellcheck="false"></textarea></div>
+      <div class="num-grid">
+        <label>Valor de referencia μ₀ <input type="number" id="mu" value="0" step="any"></label>
+        ${T.ex[3] !== undefined ? '<label>Desviación poblacional (σ) <input type="number" id="sigma" value="1" step="any"></label>' : ''}
+      </div></div>`;
+  } else if (T.type === 'multi') {
+    html = <div id="groups-container"></div><button type="button" class="group-btn" id="add-group">+ Añadir grupo</button>;
+  } else if (T.type === 'table') {
+    html = `<div class="field"><label>Tabla de frecuencias (separa columnas con comas, filas con saltos de línea)</label>
+            <textarea id="tabla" style="height:120px;font-family:monospace;" spellcheck="false" placeholder="10, 20&#10;30, 15"></textarea></div>`;
+  } else if (T.type === 'props') {
+    html = `<div class="num-grid">
+      <label>Éxitos (x₁) <input type="number" id="x1" value="0"></label>
+      <label>Tamaño (n₁) <input type="number" id="n1" value="100"></label>
+      <label>Éxitos (x₂) <input type="number" id="x2" value="0"></label>
+      <label>Tamaño (n₂) <input type="number" id="n2" value="100"></label></div>`;
+  } else if (T.type === 'oneprop') {
+    html = `<div class="num-grid">
+      <label>Éxitos (x) <input type="number" id="x1" value="0"></label>
+      <label>Tamaño (n) <input type="number" id="n1" value="100"></label>
+      <label>Proporción nula (p₀) <input type="number" id="p0" value="0.5" step="0.01"></label></div>`;
+  }
+  area.innerHTML = html;
+
+  area.querySelectorAll('textarea, input').forEach(e => e.addEventListener('input', run));
+  if (T.type === 'multi') {
+    const container = $('#groups-container');
+    const addBtn = $('#add-group');
+    const addGroup = (val = '') => {
+      const div = document.createElement('div');
+      div.className = 'field';
+      div.style.marginBottom = '10px';
+      div.innerHTML = <label>Grupo <button type="button" style="float:right;border:none;background:none;color:red;cursor:pointer;">✖️</button></label><textarea spellcheck="false">${val}</textarea>;
+      div.querySelector('button').onclick = () => { div.remove(); run(); };
+      div.querySelector('textarea').addEventListener('input', run);
+      container.appendChild(div);
+      run();
+    };
+    addBtn.onclick = () => addGroup();
+    for(let i=0; i<3; i++) addGroup();
+  }
+}
+
+function run(){
+ const T=TESTS[$('#test').value],al=+$('#alpha').value,out=$('#out');
+ $('#alpha-out').textContent=al.toFixed(2);
+ let r,gs=[];
+ try{
+   if(T.type==='two'){
+     const A=parse($('#a').value),B=parse($('#b').value),eq=$('#eq')?$('#eq').checked:false;
+     r=T.run(A,B,0,eq); gs=[{n:T.la,d:A},{n:T.lb,d:B}].filter(g=>g.d.length>0);
+   } else if(T.type==='one'){
+     const A=parse($('#a').value),mu=parseFloat($('#mu').value)||0,sigma=parseFloat($('#sigma')?.value)||1;
+     r=T.run(A,0,mu,sigma); gs=[{n:T.la,d:A}].filter(g=>g.d.length>0);
+   } else if(T.type==='multi'){
+     const inputs=document.querySelectorAll('#groups-container textarea');
+     const G=Array.from(inputs).map(t=>parse(t.value)).filter(g=>g.length>0);
+     r=T.run(G); gs=G.map((d,i)=>({n:'Grupo '+(i+1),d}));
+   } else if(T.type==='table'){
+     r=T.run($('#tabla').value);
+   } else if(T.type==='props'){
+     const x1=+$('#x1').value,n1=+$('#n1').value,x2=+$('#x2').value,n2=+$('#n2').value;
+     if(x1>n1||x2>n2) throw Error('Los éxitos no pueden superar el tamaño de muestra.');
+     r=T.run(x1,n1,x2,n2);
+   } else if(T.type==='oneprop'){
+     const x=+$('#x1').value,n=+$('#n1').value,p0=+$('#p0').value;
+     if(x>n) throw Error('Los éxitos no pueden superar n.');
+     r=T.run(x,n,p0);
+   }
+   if(!isFinite(r.stat)||!isFinite(r.p))throw Error('Los valores no varían o no se pueden calcular.');
+ }catch(e){out.innerHTML=<div class="error">${e.message}</div>;return}
+
+ const rej=r.p<al,v=Math.abs(r.eff),th=[.2,.5,.8],lv=v<th[0]?'muy pequeño':v<th[1]?'pequeño':v<th[2]?'mediano':'grande',pos=x=>Math.min(x,.2)/.2*100;
+ 
+ let chartHtml='';
+ if(gs.length>0){chartHtml=<section class="card"><h2>Gráficos de apoyo</h2><p class="hint">Mira si los grupos se solapan y si hay valores atípicos.</p><div class="legend">${gs.map((g,i)=><span><i style="background:${C[i%C.length]}"></i>${g.n}</span>).join('')}</div><div class="charts">${box(gs)}${hist(gs)}</div></section>}
+
+ out.innerHTML=`
+ <section class="verdict ${rej?'bad':'ok'}">
+  <h2>${rej?'Se rechaza H₀':'No se rechaza H₀'}</h2>
+  <p><b>p = ${fpval(r.p)} ${rej?'&lt;':'≥'} α = ${al.toFixed(2)}.</b> ${rej?Hay evidencia estadística de que ${T.yes}.:No hay evidencia suficiente de que ${T.yes}. Eso no demuestra que sean iguales: puede que falten datos.}</p>
+  <div class="scale" style="--al:${pos(al)}%"><i style="left:${pos(r.p)}%"></i><span style="left:${pos(r.p)}%;top:-28px">p</span><span style="left:${pos(al)}%">α</span></div>
+ </section>
+ <div class="metrics">
+  <div class="metric"><small>Estadístico</small><b>${f4(r.stat)}</b><p>Cuánto se aleja tu muestra de H₀.</p></div>
+  <div class="metric"><small>p-valor</small><b>${fpval(r.p)}</b><p>Probabilidad de ver datos así si H₀ fuera cierta.</p></div>
+  <div class="metric"><small>Tamaño del efecto (${r.en})</small><b>${f4(r.eff)}</b><p>Efecto ${lv}. Dice qué tan grande es la diferencia.</p></div>
+ </div>
+ <section class="card"><h2>Detalles del análisis: ${r.name}</h2>
+  <dl><dt>H₀ (nula)</dt><dd>${T.h0}</dd><dt>H₁ (alternativa)</dt><dd>${T.h1}</dd>${r.df!=null?<dt>Grados de libertad</dt><dd>${Array.isArray(r.df)?r.df.join(' y '):r.df}</dd>:''}</dl></section>
+ ${chartHtml}`;
+}
+
+function setup(){
+ const T=TESTS[$('#test').value];
+ $('#use').textContent=T.use;
+ renderInputs(T);
+}
+function load(){
+ const T=TESTS[$('#test').value];
+ if(T.type==='two'){$('#a').value=T.ex[0];$('#b').value=T.ex[1]||'';}
+ else if(T.type==='one'){$('#a').value=T.ex[0];if(T.ex[2])$('#mu').value=T.ex[2];if(T.ex[3]&&$('#sigma'))$('#sigma').value=T.ex[3];}
+ else if(T.type==='multi'){
+   $('#groups-container').innerHTML='';
+   T.ex.forEach(v=>$('#add-group').click());
+   const tAreas=document.querySelectorAll('#groups-container textarea');
+   T.ex.forEach((v,i)=>{if(tAreas[i])tAreas[i].value=v;});
+ }
+ else if(T.type==='table'){$('#tabla').value=T.ex[0];}
+ else if(T.type==='props'){$('#x1').value=T.ex[0];$('#n1').value=T.ex[1];$('#x2').value=T.ex[2];$('#n2').value=T.ex[3];}
+ else if(T.type==='oneprop'){$('#x1').value=T.ex[0];$('#n1').value=T.ex[1];$('#p0').value=T.ex[2];}
+ run();
+}
+$('#test').onchange=()=>{setup();load();};
+document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{$('#alpha').value=b.dataset.a;run()});
+$('#ex').onclick=load;
+$('#clr').onclick=()=>{
+ const T=TESTS[$('#test').value];
+ if(T.type==='two'){$('#a').value='';$('#b').value='';}
+ else if(T.type==='one'){$('#a').value='';}
+ else if(T.type==='multi'){document.querySelectorAll('#groups-container textarea').forEach(t=>t.value='');}
+ else if(T.type==='table'){$('#tabla').value='';}
+ else if(T.type==='props'){$('#x1').value=0;$('#x2').value=0;}
+ else if(T.type==='oneprop'){$('#x1').value=0;}
+ run();
+};
+
+setup();
+load();
+</script>
+</body>
+</html>
